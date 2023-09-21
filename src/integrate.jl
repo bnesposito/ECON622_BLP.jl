@@ -1,11 +1,10 @@
 module Integrate
 
-using Distributions
-using FastGaussQuadrature
+using Distributions, FastGaussQuadrature, LinearAlgebra, SparseGrids
 
 import Sobol: skip, SobolSeq
 import Base.Iterators: take, Repeated
-import HCubature: hcubatureyf
+import HCubature: hcubature
 import LinearAlgebra: cholesky
 import Base.Iterators: product, repeated
 
@@ -35,30 +34,37 @@ function QuasiMonteCarloIntegrator(distribution::AbstractMvNormal, ndraw=100)
     FixedNodeIntegrator(x,w)
 end 
 
-
-# using FastGaussQuadrature, LinearAlgebra
-# import Base.Iterators: product, repeated
-# function ∫q(f, dx::MvNormal; ndraw=100)
-#   n = Int(ceil(ndraw^(1/length(dx))))
-#   x, w = gausshermite(n)
-#   L = cholesky(dx.Σ).L
-#   sum(f(√2*L*vcat(xs...) + dx.μ)*prod(ws)
-#       for (xs,ws) ∈ zip(product(repeated(x, length(dx))...),
-#                         product(repeated(w, length(dx))...))
-#         )/(π^(length(dx)/2))
-# end
-
-function QuadratureIntegrator(distribution::MvNormal, ndraw=100)
-  n = Int(ceil(ndraw^(1/length(distribution))))
-  x, w = gausshermite(n)
-  L = cholesky(distribution.Σ).L
-  sum(f(√2*L*vcat(xs...) + distribution.μ)*prod(ws) for (xs,ws) ∈ zip(product(repeated(x, length(distribution))...), 
-                                                                      product(repeated(w, length(distribution))...))
-        )/(π^(length(distribution)/2))
-
+function QuadratureIntegrator(distribution::UnivariateDistribution, ndraw=100)
+    n = Int(ceil(ndraw^(1/length(distribution))))
+    x, w = gausshermite(n)
+    w = w/π^(1/2)
+    x = sqrt(2)*x
+    FixedNodeIntegrator(x,w)
 end
 
-#print(QuadratureIntegrator(MvNormal([0.0,0.0],[1.0 0.5; 0.5 1.0]))(x->x[1]^2+x[2]^2))
+function QuadratureIntegrator(distribution::MvNormal, ndraw=100)
+    n = Int(ceil(ndraw^(1/length(distribution))))
+    x, w = gausshermite(n)
+    L = cholesky(distribution.Σ).L
+    wout = [prod(ws) for ws in product(repeated(w, length(distribution))...)]/π^(length(distribution)/2)
+    xout = [sqrt(2)*L*vcat(xs...) + distribution.μ for xs in product(repeated(x, length(distribution))...)]
+    FixedNodeIntegrator(xout, wout)
+end
+
+function SparseGridIntegrator(distribution::UnivariateDistribution, order=5)
+    x, w = sparsegrid(length(distribution), order, gausshermite, sym=true)
+    x = [sqrt(2)*a[1] for a in x]
+    w = w/π^(1/2)
+    FixedNodeIntegrator(x,w)
+end
+
+function SparseGridIntegrator(distribution::MvNormal, order = 5)
+    x, w = sparsegrid(length(distribution), order, gausshermite, sym=true)
+    L = cholesky(distribution.Σ).L
+    wout = w/π^(length(distribution)/2)
+    xout = [sqrt(2)*L*xs + distribution.μ for xs in x]
+    FixedNodeIntegrator(xout,wout)
+end
 
 struct AdaptiveIntegrator{FE,FT,FJ,A,L} <: AbstractIntegrator
     eval::FE
@@ -76,7 +82,7 @@ function AdaptiveIntegrator(dist::AbstractMvNormal; eval=hcubature, options=())
     Dx(t) = prod((1 .+ t.^2)./(1 .- t.^2).^2)*pdf(dist,x(t))
     args = options
     limits = (-ones(D), ones(D))
-    AdaptiveIntegrator(hcubature,x,Dx,args, limits)
+    AdaptiveIntegrator(hcubature, x, Dx, args, limits)
 end
 
 
