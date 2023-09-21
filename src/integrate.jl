@@ -1,10 +1,13 @@
 module Integrate
 
 using Distributions
+using FastGaussQuadrature
+
 import Sobol: skip, SobolSeq
 import Base.Iterators: take, Repeated
-import HCubature: hcubature
+import HCubature: hcubatureyf
 import LinearAlgebra: cholesky
+import Base.Iterators: product, repeated
 
 abstract type AbstractIntegrator end
 
@@ -33,6 +36,30 @@ function QuasiMonteCarloIntegrator(distribution::AbstractMvNormal, ndraw=100)
 end 
 
 
+# using FastGaussQuadrature, LinearAlgebra
+# import Base.Iterators: product, repeated
+# function ∫q(f, dx::MvNormal; ndraw=100)
+#   n = Int(ceil(ndraw^(1/length(dx))))
+#   x, w = gausshermite(n)
+#   L = cholesky(dx.Σ).L
+#   sum(f(√2*L*vcat(xs...) + dx.μ)*prod(ws)
+#       for (xs,ws) ∈ zip(product(repeated(x, length(dx))...),
+#                         product(repeated(w, length(dx))...))
+#         )/(π^(length(dx)/2))
+# end
+
+function QuadratureIntegrator(distribution::MvNormal, ndraw=100)
+  n = Int(ceil(ndraw^(1/length(distribution))))
+  x, w = gausshermite(n)
+  L = cholesky(distribution.Σ).L
+  sum(f(√2*L*vcat(xs...) + distribution.μ)*prod(ws) for (xs,ws) ∈ zip(product(repeated(x, length(distribution))...), 
+                                                                      product(repeated(w, length(distribution))...))
+        )/(π^(length(distribution)/2))
+
+end
+
+#print(QuadratureIntegrator(MvNormal([0.0,0.0],[1.0 0.5; 0.5 1.0]))(x->x[1]^2+x[2]^2))
+
 struct AdaptiveIntegrator{FE,FT,FJ,A,L} <: AbstractIntegrator
     eval::FE
     transform::FT
@@ -51,5 +78,6 @@ function AdaptiveIntegrator(dist::AbstractMvNormal; eval=hcubature, options=())
     limits = (-ones(D), ones(D))
     AdaptiveIntegrator(hcubature,x,Dx,args, limits)
 end
+
 
 end
