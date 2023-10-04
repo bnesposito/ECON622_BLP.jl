@@ -1,6 +1,6 @@
 module BLP
 
-import NLsolve, CodeTracking, BenchmarkTools, Profile
+import NLsolve, CodeTracking, BenchmarkTools, Profile, StaticArrays
 
 include("integrate.jl")
 
@@ -48,16 +48,13 @@ function delta(s, Σ, x, ∫)
   return(sol.zero)
 end
 
-function share_opt(δ::Vector{Float64}, Σ::Matrix{Float64}, x::Matrix{Float64}, ∫::Integrate.FixedNodeIntegrator{Vector{Float64},Vector{Float64}})
-  J,K = size(x)
-  #(length(δ) == J) || error("length(δ)=$(length(δ)) != size(x,1)=$J")
-  #(K,K) == size(Σ) || error("size(x,2)=$K != size(Σ)=$(size(Σ))")
+function share_opt(δ::Vector{Float64}, Σ::Matrix{Float64}, x::Matrix{Float64}, ∫)
   function shareν(ν)
-    s = δ .+ x*Σ*ν
-    smax = max(0,maximum(s))
-    s .-= smax
-    s .= exp.(s)
-    s ./= (sum(s) + exp(0-smax))
+    @fastmath s = δ .+ x*Σ*ν
+    @fastmath smax = max(0, maximum(s))
+    @fastmath s .-= smax
+    @fastmath s .= exp.(s)
+    @fastmath s ./= (sum(s) + exp(0-smax))
     return(s)
   end
   return(∫(shareν))

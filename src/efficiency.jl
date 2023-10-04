@@ -16,9 +16,7 @@ Profile.init(n=10^7, delay = 0.000001)
 @profile out = BLP.share(δ, Σ, x, ∫)
 Profile.print(noisefloor = 1.0) 
 @profview BLP.share(δ, Σ, x, ∫)
-
 # It seems like most of the time is spent on the shareν function.
-@code_warntype BLP.share(δ, Σ, x, ∫)
 
 @btime ∫ = Integrate.QuadratureIntegrator(MvNormal(2,1.0), 1000)
 @btime ∫opt = Integrate.QuadratureIntegrator_opt(MvNormal(2,1.0), 1000)
@@ -26,8 +24,11 @@ Profile.print(noisefloor = 1.0)
 ∫ = Integrate.QuadratureIntegrator(MvNormal(2,1.0), 1000)
 ∫opt = Integrate.QuadratureIntegrator_opt(MvNormal(2,1.0), 1000)
 
+@code_warntype BLP.share(δ, Σ, x, ∫)
+@code_warntype BLP.share(δ, Σ, x, ∫opt)
+
 @btime BLP.share(δ, Σ, x, ∫)
 @btime BLP.share_opt(δ, Σ, x, ∫)
 @btime BLP.share_opt(δ, Σ, x, ∫opt)
 
-# No difference unfortunately. Even worse, the optimized version is slower. 
+# Same results but no improvement in performance unfortunately. Even worse, the optimized version is slower. 
